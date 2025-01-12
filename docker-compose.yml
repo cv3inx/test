@@ -2,22 +2,16 @@ version: '3.8'
 
 services:
   ubuntu-ssh:
-    image: ubuntu:20.04
-    container_name: ubuntu-ssh
-    privileged: true
-    ports:
-      - "2221:2221"
-    volumes:
-      - /:/host
-    environment:
-      - DEBIAN_FRONTEND=noninteractive
-    command: ["/usr/sbin/sshd", "-D"]
-    stdin_open: true
-    tty: true
     build:
       context: .
       dockerfile: Dockerfile
-
-volumes:
-  host-volume:
-    driver: local
+    container_name: ubuntu-ssh
+    privileged: true
+    ports:
+      - "2221:22"  # Forward port 22 di container ke port 2221 di host
+    volumes:
+      - /:/host  # Memetakan root filesystem host ke /host di dalam container
+    environment:
+      - DEBIAN_FRONTEND=noninteractive
+    stdin_open: true
+    tty: true
