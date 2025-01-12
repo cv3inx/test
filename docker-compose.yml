@@ -8,7 +8,7 @@ services:
     container_name: ubuntu-ssh
     privileged: true
     ports:
-      - "2221:22"  # Forward port 22 di container ke port 2221 di host
+      - "2231:22"  # Forward port 22 di container ke port 2221 di host
     volumes:
       - /:/host  # Memetakan root filesystem host ke /host di dalam container
     environment:
