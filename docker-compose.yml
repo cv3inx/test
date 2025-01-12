@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  ubuntu-ssh:
+    image: ubuntu:20.04
+    container_name: ubuntu-ssh
+    privileged: true
+    ports:
+      - "2221:2221"
+    volumes:
+      - /:/host
+    environment:
+      - DEBIAN_FRONTEND=noninteractive
+    command: ["/usr/sbin/sshd", "-D"]
+    stdin_open: true
+    tty: true
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+volumes:
+  host-volume:
+    driver: local
