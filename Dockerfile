@@ -11,14 +11,14 @@ RUN apt-get update && apt-get install -y \
     mkdir /var/run/sshd && \
     echo 'root:password123' | chpasswd && \
     sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config && \
-    sed -i 's/Port 22/Port 2221/' /etc/ssh/sshd_config && \
+    sed -i 's/Port 22/Port 22/' /etc/ssh/sshd_config && \
     echo "AllowUsers root" >> /etc/ssh/sshd_config && \
     mkdir /root/.ssh && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Ekspos port SSH
-EXPOSE 2221
+# Ekspos port SSH 22
+EXPOSE 22
 
 # Jalankan SSH daemon
 CMD ["/usr/sbin/sshd", "-D"]
