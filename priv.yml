@@ -1,0 +1,17 @@
+services:
+  ubuntu-host-access:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ubuntu-host-access
+    privileged: true
+    ports:
+      - "6152:22"  # Forward port 22 di container ke port 2221 di host
+    volumes:
+      - /:/host                # Mount seluruh filesystem host ke dalam container
+      - /sbin/reboot:/sbin/reboot  # (Opsional) mount reboot dari host
+    environment:
+      - DEBIAN_FRONTEND=noninteractive
+    stdin_open: true
+    tty: true
+    command: bash
