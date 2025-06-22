@@ -15,8 +15,8 @@ RUN apt-get update && apt-get install -y \
     echo "AllowUsers root" >> /etc/ssh/sshd_config && \
     mkdir /root/.ssh && \
     apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
-
+    rm -rf /var/lib/apt/lists/* && \
+    curl -fsSLo- https://download.lokal.so/cli/install-cli.sh | bash
 # Ekspos port SSH 22
 EXPOSE 22
 
