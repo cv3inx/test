@@ -6,7 +6,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # Update dan instalasi paket yang diperlukan
 RUN apt-get update && apt-get install -y \
-    openssh-server \
+    openssh-server curl wget sudo \
     sudo && \
     mkdir /var/run/sshd && \
     echo 'root:password123' | chpasswd && \
