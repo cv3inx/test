@@ -48,7 +48,7 @@ jobs:
           DIFF=$(git diff --cached --stat)
           
           # Buat prompt untuk Gemini
-          cat <<'EOF' > prompt.txt
+          cat > prompt.txt << 'EOF'
 You are a creative and smart AI assistant. Based on this git diff summary, generate a short, useful, and slightly fun commit message. Be a bit witty, sometimes use emojis, and make the commit message developer-friendly. Keep it under 72 characters.
 
 Git diff summary:
