@@ -2,20 +2,21 @@ name: Auto commit with Gemini AI
 
 on:
   schedule:
-    - cron: '0 * * * *'  # Tiap 1 jam sekali
+    - cron: '0 * * * *'  # Setiap jam (diperbaiki format cron)
   push:
     branches:
       - master
+      - main  # Ditambahkan untuk kompatibilitas dengan repo yang menggunakan main branch
 
 jobs:
   auto_commit:
     runs-on: ubuntu-latest
-
+    
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4  # Updated ke versi terbaru
         with:
-          persist-credentials: false
+          token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
       - name: Update LAST_UPDATED
@@ -27,43 +28,70 @@ jobs:
           git config --local user.email "${{ secrets.EMAIL }}"
           git config --local user.name "FARID"
 
-      - name: Stage changes
-        run: git add -A
-
-      - name: Generate Commit Message with Gemini AI
-        id: gemini
+      - name: Check for changes
+        id: check_changes
         run: |
-          DIFF=$(git diff --cached)
-
-          cat <<EOF > prompt.txt
-You are a creative and smart AI assistant. Based on this git diff, generate a short, useful, and slightly fun commit message. Be a bit witty, sometimes use emojis, and make the commit message developer-friendly.
-
-Git diff:
-${DIFF}
-EOF
-
-          ESCAPED_PROMPT=$(jq -Rs . < prompt.txt)
-
-          RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${{ secrets.GEMINI_API_KEY }}" \
-            -H "Content-Type: application/json" \
-            -d "{\"contents\":[{\"parts\":[{\"text\":${ESCAPED_PROMPT}}]}]}")
-
-          MSG=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text' | head -n 1)
-
-          echo "AI_COMMIT_MESSAGE=$MSG" >> $GITHUB_ENV
-          echo "Generated commit message:"
-          echo "$MSG"
-
-      - name: Commit with AI message
-        run: |
+          git add -A
           if git diff --cached --quiet; then
-            echo "No changes to commit."
-            exit 0
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo "No changes detected."
+          else
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "Changes detected."
           fi
 
+      - name: Generate Commit Message with Gemini AI
+        if: steps.check_changes.outputs.has_changes == 'true'
+        id: gemini
+        run: |
+          # Ambil diff untuk dianalisis
+          DIFF=$(git diff --cached --stat)
+          
+          # Buat prompt untuk Gemini
+          cat <<'EOF' > prompt.txt
+You are a creative and smart AI assistant. Based on this git diff summary, generate a short, useful, and slightly fun commit message. Be a bit witty, sometimes use emojis, and make the commit message developer-friendly. Keep it under 72 characters.
+
+Git diff summary:
+EOF
+          echo "${DIFF}" >> prompt.txt
+          
+          # Escape prompt untuk JSON
+          ESCAPED_PROMPT=$(jq -Rs . < prompt.txt)
+          
+          # Call Gemini API dengan error handling
+          RESPONSE=$(curl -s -w "%{http_code}" -X POST \
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${{ secrets.GEMINI_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"contents\":[{\"parts\":[{\"text\":${ESCAPED_PROMPT}}]}]}")
+          
+          # Extract HTTP status code
+          HTTP_STATUS="${RESPONSE: -3}"
+          RESPONSE_BODY="${RESPONSE%???}"
+          
+          if [ "$HTTP_STATUS" -eq 200 ]; then
+            # Extract commit message
+            MSG=$(echo "$RESPONSE_BODY" | jq -r '.candidates[0].content.parts[0].text' 2>/dev/null | head -n 1 | tr -d '\n\r')
+            
+            # Fallback jika parsing gagal
+            if [ -z "$MSG" ] || [ "$MSG" = "null" ]; then
+              MSG="🤖 Auto-update: $(date '+%Y-%m-%d %H:%M')"
+            fi
+          else
+            echo "API call failed with status: $HTTP_STATUS"
+            echo "Response: $RESPONSE_BODY"
+            MSG="🤖 Auto-update: $(date '+%Y-%m-%d %H:%M')"
+          fi
+          
+          echo "AI_COMMIT_MESSAGE=$MSG" >> $GITHUB_ENV
+          echo "Generated commit message: $MSG"
+
+      - name: Commit with AI message
+        if: steps.check_changes.outputs.has_changes == 'true'
+        run: |
           git commit -m "$AI_COMMIT_MESSAGE"
 
       - name: Push to GitHub
+        if: steps.check_changes.outputs.has_changes == 'true'
         uses: ad-m/github-push-action@master
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
