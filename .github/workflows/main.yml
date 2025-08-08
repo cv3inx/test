@@ -1,95 +1,58 @@
-name: Auto commit with Gemini AI
+name: Auto commit
 
 on:
-  schedule:
-    - cron: '0 * * * *'  # Setiap jam
   push:
     branches:
-      - master
       - main
+
+  schedule:
+    - cron: '0 * * * *' # Setiap 1 jam
 
 jobs:
   auto_commit:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: false
           fetch-depth: 0
 
-      - name: Update LAST_UPDATED
+      - name: Modify LAST_UPDATED
         run: |
           echo "$(date '+%A, %d %B %Y - %T %z')" > LAST_UPDATED
 
-      - name: Setup Git identity
+      - name: Read prompts from PROMPT.txt
+        id: read_prompt
+        run: |
+          content=$(cat PROMPT.txt)
+          echo "PROMPT_TEXT<<EOF" >> $GITHUB_ENV
+          echo "$content" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+      - name: Generate commit message using Gemini AI
+        id: generate_commit
+        run: |
+          response=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent" \
+            -H "Authorization: Bearer ${{ secrets.GEMINI_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "contents": [{"parts": [{"text": "'"${PROMPT_TEXT}"'"}]}]
+            }')
+
+          message=$(echo "$response" | jq -r '.candidates[0].content.parts[0].text')
+
+          # Save to env var
+          echo "COMMIT_MSG=$message" >> $GITHUB_ENV
+
+      - name: Commit changes
         run: |
           git config --local user.email "${{ secrets.EMAIL }}"
-          git config --local user.name "FARID"
-
-      - name: Check for changes
-        id: check_changes
-        run: |
+          git config --local user.name "Ditzzy"
           git add -A
-          if git diff --cached --quiet; then
-            echo "has_changes=false" >> $GITHUB_OUTPUT
-            echo "No changes detected."
-          else
-            echo "has_changes=true" >> $GITHUB_OUTPUT
-            echo "Changes detected."
-          fi
+          git commit -m "${{ env.COMMIT_MSG }}" || echo "No changes to commit"
 
-      - name: Generate Commit Message with Gemini AI
-        if: steps.check_changes.outputs.has_changes == 'true'
-        id: gemini
-        run: |
-          # Baca prompt dari file PROMPT.txt di repo
-          if [ -f "PROMPT.txt" ]; then
-            PROMPT_CONTENT=$(cat PROMPT.txt)
-          else
-            echo "PROMPT.txt not found. Using default prompt."
-            PROMPT_CONTENT="Generate a creative commit message with emojis based on the changes."
-          fi
-          
-          # Escape prompt untuk JSON dengan proper handling
-          ESCAPED_PROMPT=$(printf '%s' "$PROMPT_CONTENT" | jq -Rs .)
-          
-          # Call Gemini API dengan error handling
-          RESPONSE=$(curl -s -w "HTTPSTATUS:%{http_code}" -X POST \
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${{ secrets.GEMINI_API_KEY }}" \
-            -H "Content-Type: application/json" \
-            -d "{\"contents\":[{\"parts\":[{\"text\":$ESCAPED_PROMPT}]}]}")
-          
-          # Extract HTTP status code
-          HTTP_STATUS=$(echo "$RESPONSE" | grep -o 'HTTPSTATUS:[0-9]*' | cut -d':' -f2)
-          RESPONSE_BODY=$(echo "$RESPONSE" | sed -E 's/HTTPSTATUS:[0-9]*$//')
-          
-          if [ "$HTTP_STATUS" -eq 200 ]; then
-            # Extract commit message
-            MSG=$(echo "$RESPONSE_BODY" | jq -r '.candidates[0].content.parts[0].text' 2>/dev/null | head -n 1 | tr -d '\n\r')
-            
-            # Fallback jika parsing gagal
-            if [ -z "$MSG" ] || [ "$MSG" = "null" ]; then
-              MSG="🤖 Auto-update: $(date '+%Y-%m-%d %H:%M')"
-            fi
-          else
-            echo "API call failed with status: $HTTP_STATUS"
-            echo "Response: $RESPONSE_BODY"
-            MSG="🤖 Auto-update: $(date '+%Y-%m-%d %H:%M')"
-          fi
-          
-          echo "AI_COMMIT_MESSAGE=$MSG" >> $GITHUB_ENV
-          echo "Generated commit message: $MSG"
-
-      - name: Commit with AI message
-        if: steps.check_changes.outputs.has_changes == 'true'
-        run: |
-          git commit -m "$AI_COMMIT_MESSAGE"
-
-      - name: Push to GitHub
-        if: steps.check_changes.outputs.has_changes == 'true'
-        uses: ad-m/github-push-action@v0.6.0  # Specify a version
-        with:
+      - name: Push changes
+        uses: ad-m/github-push-action@main
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          force: false
