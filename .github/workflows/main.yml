@@ -23,13 +23,11 @@ jobs:
         run: |
           echo "$(date '+%A, %d %B %Y - %T %z')" > LAST_UPDATED
 
-      - name: Read prompts from PROMPT.txt
+      - name: Read prompt from PROMPT.txt
         id: read_prompt
         run: |
-          content=$(cat PROMPT.txt)
-          echo "PROMPT_TEXT<<EOF" >> $GITHUB_ENV
-          echo "$content" >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
+          PROMPT_TEXT=$(cat PROMPT.txt | tr -d '\n' | sed 's/"/\\"/g')
+          echo "PROMPT_TEXT=$PROMPT_TEXT" >> $GITHUB_ENV
 
       - name: Generate commit message using Gemini AI
         id: generate_commit
@@ -37,13 +35,9 @@ jobs:
           response=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent" \
             -H "Authorization: Bearer ${{ secrets.GEMINI_API_KEY }}" \
             -H "Content-Type: application/json" \
-            -d '{
-              "contents": [{"parts": [{"text": "'"${PROMPT_TEXT}"'"}]}]
-            }')
+            -d "{\"contents\": [{\"parts\": [{\"text\": \"${{ env.PROMPT_TEXT }}\"}]}]}")
 
           message=$(echo "$response" | jq -r '.candidates[0].content.parts[0].text')
-
-          # Save to env var
           echo "COMMIT_MSG=$message" >> $GITHUB_ENV
 
       - name: Commit changes
@@ -55,4 +49,5 @@ jobs:
 
       - name: Push changes
         uses: ad-m/github-push-action@main
+        with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
