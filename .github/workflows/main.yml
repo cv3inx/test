@@ -2,7 +2,7 @@ name: Auto commit with Gemini AI
 
 on:
   schedule:
-    - cron: '0 7,10,13,16 * * *'  # 07:00, 10:00, 13:00, 16:00 WIB
+    - cron: '0 * * * *'  # <-- setiap 1 jam
   push:
     branches:
       - master
@@ -25,7 +25,7 @@ jobs:
       - name: Setup Git
         run: |
           git config --local user.email "${{ secrets.EMAIL }}"
-          git config --local user.name "Ditzzy"
+          git config --local user.name "FARID"
 
       - name: Stage changes
         run: git add -A
@@ -35,21 +35,16 @@ jobs:
         run: |
           DIFF=$(git diff --cached)
 
-          PROMPT=$(cat <<EOF
-You are a creative and smart AI assistant. Based on this git diff, generate a short, useful, and slightly fun commit message. You can use emojis, be a bit witty, but the message should still reflect the change.
+          echo "You are a creative and smart AI assistant. Based on this git diff, generate a short, useful, and slightly fun commit message. You can use emojis, be a bit witty, but the message should still reflect the change.
 
 Git diff:
-${DIFF}
-EOF
-          )
+${DIFF}" > prompt.txt
+
+          ESCAPED_PROMPT=$(jq -Rs . < prompt.txt)
 
           RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${{ secrets.GEMINI_API_KEY }}" \
-          -H "Content-Type: application/json" \
-          -d "{
-            \"contents\": [
-              {\"parts\": [{\"text\": \"$PROMPT\"}]}
-            ]
-          }")
+            -H "Content-Type: application/json" \
+            -d "{\"contents\":[{\"parts\":[{\"text\":${ESCAPED_PROMPT}}]}]}")
 
           MSG=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text' | head -n 1)
 
