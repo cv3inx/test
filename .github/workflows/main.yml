@@ -2,10 +2,9 @@ name: Auto commit with Gemini AI
 
 on:
   schedule:
-    - cron: '0 * * * *'  # Every hour
+    - cron: '0 * * * *'  # Setiap jam
   push:
     branches:
-      - master
       - main
 
 jobs:
@@ -44,34 +43,32 @@ jobs:
         if: steps.check_changes.outputs.has_changes == 'true'
         id: gemini
         run: |
-          DIFF=$(git diff --cached --stat)
-          
+          # Baca prompt dari file PROMPT.txt di repo
           if [ -f "PROMPT.txt" ]; then
             PROMPT_CONTENT=$(cat PROMPT.txt)
           else
-            PROMPT_CONTENT="Generate a creative commit message with emojis based on the changes:"
+            echo "PROMPT.txt not found. Using default prompt."
+            PROMPT_CONTENT="Generate a creative commit message with emojis based on the changes."
           fi
           
-          FULL_PROMPT=$(cat << EOF
-$PROMPT_CONTENT
-
-Git diff summary:
-$DIFF
-EOF
-)
+          # Escape prompt untuk JSON dengan proper handling
+          ESCAPED_PROMPT=$(printf '%s' "$PROMPT_CONTENT" | jq -Rs .)
           
-          ESCAPED_PROMPT=$(printf '%s' "$FULL_PROMPT" | jq -Rs .)
-          
+          # Call Gemini API dengan error handling
           RESPONSE=$(curl -s -w "HTTPSTATUS:%{http_code}" -X POST \
             "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${{ secrets.GEMINI_API_KEY }}" \
             -H "Content-Type: application/json" \
             -d "{\"contents\":[{\"parts\":[{\"text\":$ESCAPED_PROMPT}]}]}")
           
+          # Extract HTTP status code
           HTTP_STATUS=$(echo "$RESPONSE" | grep -o 'HTTPSTATUS:[0-9]*' | cut -d':' -f2)
           RESPONSE_BODY=$(echo "$RESPONSE" | sed -E 's/HTTPSTATUS:[0-9]*$//')
           
           if [ "$HTTP_STATUS" -eq 200 ]; then
+            # Extract commit message
             MSG=$(echo "$RESPONSE_BODY" | jq -r '.candidates[0].content.parts[0].text' 2>/dev/null | head -n 1 | tr -d '\n\r')
+            
+            # Fallback jika parsing gagal
             if [ -z "$MSG" ] || [ "$MSG" = "null" ]; then
               MSG="🤖 Auto-update: $(date '+%Y-%m-%d %H:%M')"
             fi
@@ -91,7 +88,7 @@ EOF
 
       - name: Push to GitHub
         if: steps.check_changes.outputs.has_changes == 'true'
-        uses: ad-m/github-push-action@v0.6.0  # Specify a version
+        uses: ad-m/github-push-action@main  # Specify a version
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           force: false
