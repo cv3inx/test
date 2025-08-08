@@ -29,13 +29,14 @@ jobs:
       - name: Read prompt from PROMPT.txt
         id: read_prompt
         run: |
-          PROMPT_TEXT=$(cat PROMPT.txt | tr -d '\n' | sed 's/"/\\"/g')
+          PROMPT_TEXT=$(cat PROMPT.txt | tr -d '\n')
           echo "PROMPT_TEXT=$PROMPT_TEXT" >> $GITHUB_ENV
 
       - name: Generate commit message from Nekorinn API
         id: generate_commit
         run: |
-          response=$(curl -s "https://api.nekorinn.my.id/ai/opengpt?text=${{ env.PROMPT_TEXT }}")
+          encoded=$(echo "${{ env.PROMPT_TEXT }}" | jq -sRr @uri)
+          response=$(curl -s "https://api.nekorinn.my.id/ai/opengpt?text=$encoded")
           message=$(echo "$response" | jq -r '.result')
           echo "COMMIT_MSG=$message" >> $GITHUB_ENV
 
