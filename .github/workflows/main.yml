@@ -2,11 +2,11 @@ name: Auto commit with Gemini AI
 
 on:
   schedule:
-    - cron: '0 * * * *'  # Setiap jam (diperbaiki format cron)
+    - cron: '0 * * * *'  # Setiap jam (format cron diperbaiki)
   push:
     branches:
       - master
-      - main  # Ditambahkan untuk kompatibilitas dengan repo yang menggunakan main branch
+      - main
 
 jobs:
   auto_commit:
@@ -14,7 +14,7 @@ jobs:
     
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4  # Updated ke versi terbaru
+        uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
@@ -54,24 +54,27 @@ jobs:
             PROMPT_CONTENT="Generate a creative commit message with emojis based on the changes:"
           fi
           
-          # Gabungkan prompt dengan diff
-          FULL_PROMPT="${PROMPT_CONTENT}
+          # Gabungkan prompt dengan diff menggunakan delimiter
+          FULL_PROMPT=$(cat << EOF
+$PROMPT_CONTENT
 
 Git diff summary:
-${DIFF}"
+$DIFF
+EOF
+)
           
-          # Escape prompt untuk JSON
-          ESCAPED_PROMPT=$(echo "$FULL_PROMPT" | jq -Rs .)
+          # Escape prompt untuk JSON dengan proper handling
+          ESCAPED_PROMPT=$(printf '%s' "$FULL_PROMPT" | jq -Rs .)
           
           # Call Gemini API dengan error handling
-          RESPONSE=$(curl -s -w "%{http_code}" -X POST \
+          RESPONSE=$(curl -s -w "HTTPSTATUS:%{http_code}" -X POST \
             "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${{ secrets.GEMINI_API_KEY }}" \
             -H "Content-Type: application/json" \
-            -d "{\"contents\":[{\"parts\":[{\"text\":${ESCAPED_PROMPT}}]}]}")
+            -d "{\"contents\":[{\"parts\":[{\"text\":$ESCAPED_PROMPT}]}]}")
           
           # Extract HTTP status code
-          HTTP_STATUS="${RESPONSE: -3}"
-          RESPONSE_BODY="${RESPONSE%???}"
+          HTTP_STATUS=$(echo "$RESPONSE" | grep -o 'HTTPSTATUS:[0-9]*' | cut -d':' -f2)
+          RESPONSE_BODY=$(echo "$RESPONSE" | sed -E 's/HTTPSTATUS:[0-9]*$//')
           
           if [ "$HTTP_STATUS" -eq 200 ]; then
             # Extract commit message
