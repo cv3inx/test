@@ -47,16 +47,21 @@ jobs:
           # Ambil diff untuk dianalisis
           DIFF=$(git diff --cached --stat)
           
-          # Buat prompt untuk Gemini
-          cat > prompt.txt << 'EOF'
-You are a creative and smart AI assistant. Based on this git diff summary, generate a short, useful, and slightly fun commit message. Be a bit witty, sometimes use emojis, and make the commit message developer-friendly. Keep it under 72 characters.
+          # Baca prompt dari file PROMPT.txt di repo
+          if [ -f "PROMPT.txt" ]; then
+            PROMPT_CONTENT=$(cat PROMPT.txt)
+          else
+            PROMPT_CONTENT="Generate a creative commit message with emojis based on the changes:"
+          fi
+          
+          # Gabungkan prompt dengan diff
+          FULL_PROMPT="${PROMPT_CONTENT}
 
 Git diff summary:
-EOF
-          echo "${DIFF}" >> prompt.txt
+${DIFF}"
           
           # Escape prompt untuk JSON
-          ESCAPED_PROMPT=$(jq -Rs . < prompt.txt)
+          ESCAPED_PROMPT=$(echo "$FULL_PROMPT" | jq -Rs .)
           
           # Call Gemini API dengan error handling
           RESPONSE=$(curl -s -w "%{http_code}" -X POST \
