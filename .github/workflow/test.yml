@@ -1,0 +1,76 @@
+name: Auto commit with fun AI messages
+
+on:
+  push:
+    branches:
+      - master
+
+  schedule:
+    - cron: '0 7,10,13,16 * * *'  # 07.00, 10.00, 13.00, 16.00 WIB
+
+jobs:
+  auto_commit:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Modify LAST_UPDATED
+        run: |
+          d=$(date '+%A, %d %B %Y - %T %z')
+          echo "$d" > LAST_UPDATED
+
+      - name: Setup Git
+        run: |
+          git config --local user.email "${{ secrets.EMAIL }}"
+          git config --local user.name "Ditzzy"
+
+      - name: Stage changes
+        run: git add -A
+
+      - name: Generate fun AI Commit Message
+        id: generate_commit_msg
+        run: |
+          DIFF=$(git diff --cached)
+
+          echo "Sending diff to OpenAI API..."
+          RESPONSE=$(curl -s https://api.openai.com/v1/chat/completions \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${{ secrets.OPENAI_API_KEY }}" \
+            -d '{
+              "model": "gpt-4",
+              "messages": [
+                {
+                  "role": "system",
+                  "content": "You are a witty, creative, and helpful Git commit assistant. Your job is to create short, funny, or expressive commit messages based on code changes. Sometimes use emojis. Keep it useful, but not boring."
+                },
+                {
+                  "role": "user",
+                  "content": "Here is the git diff:\n'"${DIFF}"'\n\nNow write a commit message that is fun, unique, and makes developers smile, but still reflects the change."
+                }
+              ],
+              "temperature": 1.0
+            }')
+
+          MSG=$(echo "$RESPONSE" | jq -r '.choices[0].message.content' | head -n 1)
+          echo "AI_COMMIT_MESSAGE=$MSG" >> $GITHUB_ENV
+          echo "Generated commit message:"
+          echo "$MSG"
+
+      - name: Commit with AI message
+        run: |
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+
+          git commit -m "$AI_COMMIT_MESSAGE"
+
+      - name: Push to GitHub
+        uses: ad-m/github-push-action@master
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          force: false
