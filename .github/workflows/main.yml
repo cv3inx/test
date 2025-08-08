@@ -1,0 +1,73 @@
+name: Auto commit with Gemini AI
+
+on:
+  schedule:
+    - cron: '0 7,10,13,16 * * *'  # 07:00, 10:00, 13:00, 16:00 WIB
+  push:
+    branches:
+      - master
+
+jobs:
+  auto_commit:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Update LAST_UPDATED
+        run: |
+          echo "$(date '+%A, %d %B %Y - %T %z')" > LAST_UPDATED
+
+      - name: Setup Git
+        run: |
+          git config --local user.email "${{ secrets.EMAIL }}"
+          git config --local user.name "Ditzzy"
+
+      - name: Stage changes
+        run: git add -A
+
+      - name: Generate Commit Message with Gemini
+        id: gemini
+        run: |
+          DIFF=$(git diff --cached)
+
+          PROMPT=$(cat <<EOF
+You are a creative and smart AI assistant. Based on this git diff, generate a short, useful, and slightly fun commit message. You can use emojis, be a bit witty, but the message should still reflect the change.
+
+Git diff:
+${DIFF}
+EOF
+          )
+
+          RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${{ secrets.GEMINI_API_KEY }}" \
+          -H "Content-Type: application/json" \
+          -d "{
+            \"contents\": [
+              {\"parts\": [{\"text\": \"$PROMPT\"}]}
+            ]
+          }")
+
+          MSG=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text' | head -n 1)
+
+          echo "AI_COMMIT_MESSAGE=$MSG" >> $GITHUB_ENV
+          echo "Generated commit message:"
+          echo "$MSG"
+
+      - name: Commit with AI message
+        run: |
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+
+          git commit -m "$AI_COMMIT_MESSAGE"
+
+      - name: Push to GitHub
+        uses: ad-m/github-push-action@master
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          force: false
