@@ -7,7 +7,10 @@ on:
 
   schedule:
     - cron: '0 * * * *' # Setiap 1 jam
-
+    
+permissions:
+  contents: write
+  
 jobs:
   auto_commit:
     runs-on: ubuntu-latest
