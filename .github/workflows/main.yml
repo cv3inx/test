@@ -1,36 +1,52 @@
-name: Auto Commit with AI Message
+name: Auto commit
 
 on:
+  push:
+    branches:
+      - main
+
   schedule:
-    - cron: '0 * * * *'  # Tiap 1 jam sekali
-  workflow_dispatch:
+    - cron: '0 * * * *' # Setiap 1 jam
+
+permissions:
+  contents: write
 
 jobs:
-  auto-commit:
+  auto_commit:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repo
+      - name: Checkout repository
         uses: actions/checkout@v3
+        with:
+          persist-credentials: false
+          fetch-depth: 0
 
-      - name: Generate AI Commit Message
-        id: commit-message
+      - name: Modify LAST_UPDATED
         run: |
-          PROMPT="buat commit message random tapi menarik dan lucu"
-          RESPONSE=$(curl -s "https://api.nekorinn.my.id/ai/opengpt?text=$(echo $PROMPT | jq -sRr @uri)")
-          MESSAGE=$(echo "$RESPONSE" | jq -r '.result')
-          echo "$MESSAGE" > lastupdate.txt
-          echo "message=$MESSAGE" >> $GITHUB_OUTPUT
+          echo "$(date '+%A, %d %B %Y - %T %z')" > LAST_UPDATED
 
-      - name: Commit & Push Changes
+      - name: Encode prompt from PROMPT.txt
+        id: encode_prompt
         run: |
-          git config user.name github-actions
-          git config user.email github-actions@github.com
+          PROMPT_ENCODED=$(jq -sRr @uri < PROMPT.txt)
+          echo "PROMPT_ENCODED=$PROMPT_ENCODED" >> $GITHUB_ENV
 
-          if [[ -n "$(git status --porcelain)" ]]; then
-            git add lastupdate.txt
-            git commit -m "${{ steps.commit-message.outputs.message }}"
-            git push
-          else
-            echo "No changes to commit"
-          fi
+      - name: Generate commit message from Nekorinn API
+        id: generate_commit
+        run: |
+          response=$(curl -s "https://api.nekorinn.my.id/ai/opengpt?text=${{ env.PROMPT_ENCODED }}")
+          message=$(echo "$response" | jq -r '.result')
+          echo "COMMIT_MSG=$(echo "$message")" >> $GITHUB_ENV
+
+      - name: Commit changes
+        run: |
+          git config --local user.email "${{ secrets.EMAIL }}"
+          git config --local user.name "Ditzzy"
+          git add -A
+          git commit -m "${{ env.COMMIT_MSG }}" || echo "No changes to commit"
+
+      - name: Push changes
+        uses: ad-m/github-push-action@master
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
