@@ -2,7 +2,7 @@ name: Auto commit with Gemini AI
 
 on:
   schedule:
-    - cron: '0 * * * *'  # <-- setiap 1 jam
+    - cron: '0 * * * *'  # Tiap 1 jam sekali
   push:
     branches:
       - master
@@ -22,7 +22,7 @@ jobs:
         run: |
           echo "$(date '+%A, %d %B %Y - %T %z')" > LAST_UPDATED
 
-      - name: Setup Git
+      - name: Setup Git identity
         run: |
           git config --local user.email "${{ secrets.EMAIL }}"
           git config --local user.name "FARID"
@@ -30,15 +30,17 @@ jobs:
       - name: Stage changes
         run: git add -A
 
-      - name: Generate Commit Message with Gemini
+      - name: Generate Commit Message with Gemini AI
         id: gemini
         run: |
           DIFF=$(git diff --cached)
 
-          echo "You are a creative and smart AI assistant. Based on this git diff, generate a short, useful, and slightly fun commit message. You can use emojis, be a bit witty, but the message should still reflect the change.
+          cat <<EOF > prompt.txt
+You are a creative and smart AI assistant. Based on this git diff, generate a short, useful, and slightly fun commit message. Be a bit witty, sometimes use emojis, and make the commit message developer-friendly.
 
 Git diff:
-${DIFF}" > prompt.txt
+${DIFF}
+EOF
 
           ESCAPED_PROMPT=$(jq -Rs . < prompt.txt)
 
