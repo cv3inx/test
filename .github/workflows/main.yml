@@ -1,53 +1,36 @@
-name: Auto commit
+name: Auto Commit with AI Message
 
 on:
-  push:
-    branches:
-      - main
-
   schedule:
-    - cron: '0 * * * *' # Setiap 1 jam
-
-permissions:
-  contents: write
+    - cron: '0 * * * *'  # Tiap 1 jam sekali
+  workflow_dispatch:
 
 jobs:
-  auto_commit:
+  auto-commit:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout Repo
         uses: actions/checkout@v3
-        with:
-          persist-credentials: false
-          fetch-depth: 0
 
-      - name: Modify LAST_UPDATED
+      - name: Generate AI Commit Message
+        id: commit-message
         run: |
-          echo "$(date '+%A, %d %B %Y - %T %z')" > LAST_UPDATED
+          PROMPT="buat commit message random tapi menarik dan lucu"
+          RESPONSE=$(curl -s "https://api.nekorinn.my.id/ai/opengpt?text=$(echo $PROMPT | jq -sRr @uri)")
+          MESSAGE=$(echo "$RESPONSE" | jq -r '.result')
+          echo "$MESSAGE" > lastupdate.txt
+          echo "message=$MESSAGE" >> $GITHUB_OUTPUT
 
-      - name: Read prompt from PROMPT.txt
-        id: read_prompt
+      - name: Commit & Push Changes
         run: |
-          PROMPT_TEXT=$(cat PROMPT.txt | tr -d '\n')
-          echo "PROMPT_TEXT=$PROMPT_TEXT" >> $GITHUB_ENV
+          git config user.name github-actions
+          git config user.email github-actions@github.com
 
-      - name: Generate commit message from Nekorinn API
-        id: generate_commit
-        run: |
-          encoded=$(echo "${{ env.PROMPT_TEXT }}" | jq -sRr @uri)
-          response=$(curl -s "https://api.nekorinn.my.id/ai/opengpt?text=$encoded")
-          message=$(echo "$response" | jq -r '.result')
-          echo "COMMIT_MSG=$message" >> $GITHUB_ENV
-
-      - name: Commit changes
-        run: |
-          git config --local user.email "${{ secrets.EMAIL }}"
-          git config --local user.name "Ditzzy"
-          git add -A
-          git commit -m "$(printf "%s" "${{ env.COMMIT_MSG }}")" || echo "No changes to commit"
-
-      - name: Push changes
-        uses: ad-m/github-push-action@master
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          if [[ -n "$(git status --porcelain)" ]]; then
+            git add lastupdate.txt
+            git commit -m "${{ steps.commit-message.outputs.message }}"
+            git push
+          else
+            echo "No changes to commit"
+          fi
