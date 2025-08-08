@@ -45,7 +45,7 @@ jobs:
           git config --local user.email "${{ secrets.EMAIL }}"
           git config --local user.name "Ditzzy"
           git add -A
-          git commit -m "${{ env.COMMIT_MSG }}" || echo "No changes to commit"
+          git commit -m "$(printf "%s" "${{ env.COMMIT_MSG }}")" || echo "No changes to commit"
 
       - name: Push changes
         uses: ad-m/github-push-action@master
