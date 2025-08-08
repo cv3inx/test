@@ -1,27 +1,26 @@
-name: Auto commit with fun AI messages
+name: Auto commit with Gemini AI
 
 on:
+  schedule:
+    - cron: '0 7,10,13,16 * * *'  # 07:00, 10:00, 13:00, 16:00 WIB
   push:
     branches:
       - master
-
-  schedule:
-    - cron: '0 7,10,13,16 * * *'  # 07.00, 10.00, 13.00, 16.00 WIB
 
 jobs:
   auto_commit:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v3
         with:
           persist-credentials: false
           fetch-depth: 0
 
-      - name: Modify LAST_UPDATED
+      - name: Update LAST_UPDATED
         run: |
-          d=$(date '+%A, %d %B %Y - %T %z')
-          echo "$d" > LAST_UPDATED
+          echo "$(date '+%A, %d %B %Y - %T %z')" > LAST_UPDATED
 
       - name: Setup Git
         run: |
@@ -31,31 +30,29 @@ jobs:
       - name: Stage changes
         run: git add -A
 
-      - name: Generate fun AI Commit Message
-        id: generate_commit_msg
+      - name: Generate Commit Message with Gemini
+        id: gemini
         run: |
           DIFF=$(git diff --cached)
 
-          echo "Sending diff to OpenAI API..."
-          RESPONSE=$(curl -s https://api.openai.com/v1/chat/completions \
-            -H "Content-Type: application/json" \
-            -H "Authorization: Bearer ${{ secrets.OPENAI_API_KEY }}" \
-            -d '{
-              "model": "gpt-4",
-              "messages": [
-                {
-                  "role": "system",
-                  "content": "You are a witty, creative, and helpful Git commit assistant. Your job is to create short, funny, or expressive commit messages based on code changes. Sometimes use emojis. Keep it useful, but not boring."
-                },
-                {
-                  "role": "user",
-                  "content": "Here is the git diff:\n'"${DIFF}"'\n\nNow write a commit message that is fun, unique, and makes developers smile, but still reflects the change."
-                }
-              ],
-              "temperature": 1.0
-            }')
+          PROMPT=$(cat <<EOF
+You are a creative and smart AI assistant. Based on this git diff, generate a short, useful, and slightly fun commit message. You can use emojis, be a bit witty, but the message should still reflect the change.
 
-          MSG=$(echo "$RESPONSE" | jq -r '.choices[0].message.content' | head -n 1)
+Git diff:
+${DIFF}
+EOF
+          )
+
+          RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${{ secrets.GEMINI_API_KEY }}" \
+          -H "Content-Type: application/json" \
+          -d "{
+            \"contents\": [
+              {\"parts\": [{\"text\": \"$PROMPT\"}]}
+            ]
+          }")
+
+          MSG=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text' | head -n 1)
+
           echo "AI_COMMIT_MESSAGE=$MSG" >> $GITHUB_ENV
           echo "Generated commit message:"
           echo "$MSG"
