@@ -17,5 +17,8 @@ RUN apt-get update && \
 
 WORKDIR /root
 
-# Jalankan SSHX via shell
-CMD ["sh", "-c", "curl -sSf https://sshx.io/get | sh"]
+# Install SSHX sekali saat build
+RUN curl -sSf https://sshx.io/get | sh
+
+# Jalankan SSHX saat container start
+CMD ["/usr/local/bin/sshx"]
