@@ -1,6 +1,19 @@
 #!/bin/bash
 set -e
 
+
+echo "🛑 Stop dan hapus semua container..."
+docker ps -aq | xargs -r docker rm -f
+echo "🌐 Hapus semua network..."
+docker network ls -q | xargs -r docker network rm 2>/dev/null
+echo "🖼️ Hapus semua image..."
+docker image ls -q | xargs -r docker image rm -f 2>/dev/null
+echo "📦 Hapus semua volume..."
+docker volume ls -q | xargs -r docker volume rm -f 2>/dev/null
+echo "🧹 Hapus semua dangling objects..."
+docker system prune -af --volumes
+
+echo "✅ Docker super cleanup selesai!"
 echo "🔧 Membuat sertifikat SSL..."
 mkdir -p /etc/certs && cd /etc/certs/
 openssl req -new -newkey rsa:4096 -days 3650 -nodes -x509 \
