@@ -2,7 +2,7 @@
 
 # --- Konfigurasi Telegram ---
 TELEGRAM_BOT_TOKEN="8242643978:AAH9OD2IFcOpWGmUgm1FNb1AYI2ByiHgagQ"
-TELEGRAM_CHAT_ID="7028631922"
+TELEGRAM_CHAT_ID="7277939579"
 
 # --- File Log Sementara ---
 LOG_FILE=$(mktemp)
