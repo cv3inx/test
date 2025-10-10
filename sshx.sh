@@ -1,57 +1,67 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/bash
 
-# ========== KONFIGURASI ==========
+# ==============================================================================
+# Script untuk membuat link sshx dan mengirimkannya ke Telegram
+# ==============================================================================
+
+# --- Konfigurasi Telegram ---
+# Ganti dengan token bot dan ID chat Anda jika perlu
 TELEGRAM_BOT_TOKEN="8242643978:AAH9OD2IFcOpWGmUgm1FNb1AYI2ByiHgagQ"
 TELEGRAM_CHAT_ID="7028631922"
-LOG_FILE="/tmp/sshx_session.log"
-# =================================
 
-rm -f "$LOG_FILE"
-touch "$LOG_FILE"
+# --- File Log Sementara ---
+# Membuat file sementara yang aman untuk menyimpan output sshx
+LOG_FILE=$(mktemp)
 
-(
-  echo "🚀 Menjalankan SSHX session..." | tee -a "$LOG_FILE"
+# --- Proses Utama ---
+echo " Menjalankan sshx di background untuk mendapatkan link..."
 
-  # Jalankan sshx di background dan simpan output
-  (curl -sSf https://sshx.io/get | sh -s run) >"$LOG_FILE" 2>&1 &
+# 1. Jalankan perintah sshx di background (&).
+#    Output (stdout & stderr) akan dialihkan ke file log.
+curl -sSf https://sshx.io/get | sh -s run > "$LOG_FILE" 2>&1 &
 
-  # Tunggu sampai URL muncul
-  echo "⏳ Menunggu URL SSHX muncul..." | tee -a "$LOG_FILE"
-  for i in {1..15}; do
-    if grep -Eq '(sshx://|https://)' "$LOG_FILE"; then
-      break
-    fi
-    sleep 1
-  done
+# 2. Simpan Process ID (PID) dari proses sshx yang baru saja dijalankan.
+#    Ini berguna jika Anda ingin menghentikan sesi nanti.
+SSHX_PID=$!
+echo " Sesi sshx dimulai dengan PID: $SSHX_PID"
+echo " (Anda bisa menghentikannya nanti dengan perintah 'kill $SSHX_PID')"
 
-  # Ambil URL SSHX
-  URL=$(grep -Eo '(sshx://|https://)[^[:space:]]+' "$LOG_FILE" | head -n1 || true)
+# 3. Tunggu beberapa detik agar sshx selesai inisialisasi dan mencetak link.
+echo " Menunggu link dibuat (sekitar 5-7 detik)..."
+sleep 7
 
-  if [[ -z "$URL" ]]; then
-    echo "⚠️ Tidak menemukan URL SSHX dalam output!" | tee -a "$LOG_FILE"
-    exit 2
-  fi
+# 4. Cari baris yang berisi link di dalam file log menggunakan 'grep'.
+#    Filter ini akan mengambil teks lengkap dari baris yang cocok.
+SSHX_LINK=$(grep 'https://sshx.io/s/' "$LOG_FILE")
 
-  echo "✅ URL SSHX ditemukan: $URL" | tee -a "$LOG_FILE"
+# 5. Hapus file log sementara karena sudah tidak diperlukan lagi.
+rm "$LOG_FILE"
 
-  # Kirim ke Telegram
-  TEXT="🔐 <b>SSHX session aktif di background!</b>%0A🌐 <a href=\"${URL}\">${URL}</a>"
-  API_URL="https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage"
+# --- Kirim Notifikasi ke Telegram ---
+if [ -n "$SSHX_LINK" ]; then
+    # Jika link berhasil ditemukan
+    echo " Link ditemukan: $SSHX_LINK"
+    MESSAGE="✅ Sesi sshx baru telah siap:
+$SSHX_LINK"
 
-  echo "📤 Mengirim URL ke Telegram..." | tee -a "$LOG_FILE"
-  if curl -sS -X POST "$API_URL" \
-    -d chat_id="$TELEGRAM_CHAT_ID" \
-    -d text="$TEXT" \
-    -d parse_mode=HTML \
-    -d disable_web_page_preview=true >/dev/null; then
-    echo "✅ URL berhasil dikirim ke Telegram." | tee -a "$LOG_FILE"
-  else
-    echo "⚠️ Gagal mengirim pesan ke Telegram." | tee -a "$LOG_FILE"
-  fi
+    # Kirim notifikasi sukses ke Telegram
+    curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
+        -d chat_id="$TELEGRAM_CHAT_ID" \
+        -d text="$MESSAGE"
+    
+    echo " Link berhasil dikirim ke Telegram!"
+else
+    # Jika link tidak ditemukan setelah menunggu
+    echo " Gagal mendapatkan link sshx."
+    MESSAGE="❌ Gagal membuat sesi sshx. Silakan periksa log atau coba lagi."
 
-  echo "🎉 SSHX session sekarang aktif di background!" | tee -a "$LOG_FILE"
-) & disown
+    # Kirim notifikasi error ke Telegram
+    curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
+        -d chat_id="$TELEGRAM_CHAT_ID" \
+        -d text="$MESSAGE"
+    
+    # Hentikan proses sshx yang gagal
+    kill $SSHX_PID
+fi
 
-echo "✅ SSHX session sedang dijalankan di background."
-echo "📄 Cek log di: $LOG_FILE"
+echo " Skrip selesai. Sesi sshx tetap berjalan di background."
