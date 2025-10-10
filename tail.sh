@@ -6,7 +6,7 @@ set -e
 # --- Konfigurasi ---
 # Auth key untuk otentikasi otomatis ke akun Tailscale Anda.
 # PERINGATAN: Kunci ini bersifat rahasia. Jangan bagikan skrip ini dengan kunci di dalamnya.
-AUTH_KEY="tskey-auth-kMxA1J91tV11CNTRL-SdVxW8TmSyJW5YDN1FURyJTWwpokgE2Q"
+AUTH_KEY="tskey-auth-kfgxygS6tF11CNTRL-jnmV9xXCJFRfkdmvsirAFR1difbGx9Eg2"
 
 # --- 1. Instalasi Tailscale ---
 echo " Men-download dan menjalankan skrip instalasi Tailscale..."
