@@ -35,8 +35,8 @@ jobs:
       - name: Generate commit message from Nekorinn API
         id: generate_commit
         run: |
-          response=$(curl -s "https://api.nekorinn.my.id/ai/opengpt?text=${{ env.PROMPT_ENCODED }}")
-          message=$(echo "$response" | jq -r '.result')
+          response=$(curl -s "https://backend1.tioo.eu.org/geminiai?q==${{ env.PROMPT_ENCODED }}")
+          message=$(echo "$response" | jq -r '.data')
           echo "COMMIT_MSG=$(echo "$message")" >> $GITHUB_ENV
 
       - name: Commit changes
