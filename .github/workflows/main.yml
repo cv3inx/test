@@ -54,11 +54,11 @@ jobs:
           PROMPT_ENCODED=$(echo "$FULL_PROMPT" | jq -sRr @uri)
           echo "PROMPT_ENCODED=$PROMPT_ENCODED" >> $GITHUB_ENV
       
-      - name: Generate commit message from Nekorinn API
+      - name: Generate commit message from AI
         if: steps.check_changes.outputs.has_changes == 'true'
         id: generate_commit
         run: |
-          response=$(curl -s "https://backend1.tioo.eu.org/geminiai?q=${{ env.PROMPT_ENCODED }}")
+          response=$(curl -s "https://backend1.tioo.eu.org/gitaai?q=${{ env.PROMPT_ENCODED }}")
           echo "API Response: $response"
           message=$(echo "$response" | jq -r '.data')
           
