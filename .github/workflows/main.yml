@@ -1,52 +1,86 @@
 name: Auto commit
-
 on:
   push:
     branches:
       - main
-
   schedule:
     - cron: '0 * * * *' # Setiap 1 jam
-
 permissions:
   contents: write
-
 jobs:
   auto_commit:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
         with:
           persist-credentials: false
           fetch-depth: 0
-
+      
       - name: Modify LAST_UPDATED
         run: |
           echo "$(date '+%A, %d %B %Y - %T %z')" > LAST_UPDATED
-
+      
+      - name: Check for changes
+        id: check_changes
+        run: |
+          git add -A
+          if git diff --staged --quiet; then
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo "No changes detected"
+          else
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "Changes detected"
+          fi
+      
+      - name: Get git diff summary
+        if: steps.check_changes.outputs.has_changes == 'true'
+        id: git_diff
+        run: |
+          DIFF_SUMMARY=$(git diff --staged --stat)
+          echo "Git diff summary:"
+          echo "$DIFF_SUMMARY"
+          # Encode diff summary untuk URL
+          DIFF_ENCODED=$(echo "$DIFF_SUMMARY" | jq -sRr @uri)
+          echo "DIFF_ENCODED=$DIFF_ENCODED" >> $GITHUB_ENV
+      
       - name: Encode prompt from PROMPT.txt
+        if: steps.check_changes.outputs.has_changes == 'true'
         id: encode_prompt
         run: |
-          PROMPT_ENCODED=$(jq -sRr @uri < PROMPT.txt)
+          # Baca prompt dan tambahkan git diff
+          PROMPT_TEXT=$(cat PROMPT.txt)
+          FULL_PROMPT="${PROMPT_TEXT} Git diff summary: $(git diff --staged --stat)"
+          PROMPT_ENCODED=$(echo "$FULL_PROMPT" | jq -sRr @uri)
           echo "PROMPT_ENCODED=$PROMPT_ENCODED" >> $GITHUB_ENV
-
+      
       - name: Generate commit message from Nekorinn API
+        if: steps.check_changes.outputs.has_changes == 'true'
         id: generate_commit
         run: |
-          response=$(curl -s "https://backend1.tioo.eu.org/geminiai?q==${{ env.PROMPT_ENCODED }}")
+          response=$(curl -s "https://backend1.tioo.eu.org/geminiai?q=${{ env.PROMPT_ENCODED }}")
+          echo "API Response: $response"
           message=$(echo "$response" | jq -r '.data')
-          echo "COMMIT_MSG=$(echo "$message")" >> $GITHUB_ENV
-
+          
+          # Fallback jika API gagal atau return NULL
+          if [ -z "$message" ] || [ "$message" = "null" ]; then
+            message="🤖 Auto update: $(date '+%Y-%m-%d %H:%M:%S')"
+          fi
+          
+          # Escape special characters untuk GitHub Actions
+          message=$(echo "$message" | sed 's/"/\\"/g')
+          echo "COMMIT_MSG=$message" >> $GITHUB_ENV
+          echo "Generated commit message: $message"
+      
       - name: Commit changes
+        if: steps.check_changes.outputs.has_changes == 'true'
         run: |
           git config --local user.email "${{ secrets.EMAIL }}"
           git config --local user.name "Ditzzy"
-          git add -A
-          git commit -m "${{ env.COMMIT_MSG }}" || echo "No changes to commit"
-
+          git commit -m "${{ env.COMMIT_MSG }}"
+      
       - name: Push changes
+        if: steps.check_changes.outputs.has_changes == 'true'
         uses: ad-m/github-push-action@master
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
