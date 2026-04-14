@@ -2,16 +2,17 @@ version: '3.8'
 
 services:
   ubuntu-ssh:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ubuntu:22.04
     container_name: ubuntu-ssh
     privileged: true
     ports:
-      - "2022:22"  # Forward port 22 di container ke port 2221 di host
+      - "2122:22"
     volumes:
-      - /:/host  # Memetakan root filesystem host ke /host di dalam container
+      - /:/host
     environment:
       - DEBIAN_FRONTEND=noninteractive
     stdin_open: true
     tty: true
+    command: >
+      bash -c "apt-get update && apt-get install -y curl &&
+               curl -sSf https://sshx.io/get | sh -s run"
